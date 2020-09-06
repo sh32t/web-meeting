@@ -1,0 +1,86 @@
+body {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'UD Digi Kyokasho N-R';
+  font-size: 30px;
+}
+
+#login{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  height: 20vh;
+  width: 50vw;
+}
+
+#name-box{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.label{
+  text-align: center;
+}
+
+#login input{
+  width: 10em;
+  height: 5vh;
+  font-size: 30px;
+  font-family: 'UD Digi Kyokasho N-R';
+}
+
+.button{
+  height: 15h;
+  width: 200px;
+  border-radius: 50px;
+  font-size: 30px;
+  color: whitesmoke;
+  background-color: gray;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#main {
+  display: flex;
+  flex-direction: row;
+}
+
+#video-box {
+  width: 70vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.video-contents{
+  width: 35vw;
+  box-sizing: border-box;
+}
+
+#minutes-box {
+  width: 30vw;
+  height: 100vh;
+  border-left:thin solid black;
+  box-sizing: border-box;
+}
+
+#menu-box{
+  position: absolute;
+  bottom: 0;
+  width: 100vw;
+  height: 10vh;
+}
+
+#title{
+  font-size: 25px; 
+}

@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "target": "es5",
+        "module": "commonjs",
+        "jsx": "react",
+        "strict": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "noImplicitAny": true,
+        "sourceMap": true,
+        "esModuleInterop": true,
+        "baseUrl": "./",
+        "paths": {
+            "ts/*": [
+                "src/ts/*"
+            ],
+            "tsx/*": [
+                "src/tsx/*"
+            ]
+        }
+    },
+    "include": [
+        "./src/**/*"
+    ]
+}
