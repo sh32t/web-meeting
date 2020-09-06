@@ -67,6 +67,14 @@ body {
   box-sizing: border-box;
 }
 
+.maxview{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
 #minutes-box {
   width: 30vw;
   height: 100vh;

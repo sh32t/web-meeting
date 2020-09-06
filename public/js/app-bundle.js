@@ -48270,6 +48270,7 @@ var Main = /** @class */ (function (_super) {
         _this.state = { videoList: [], textList: [], status: '停止中', flagSpeech: false };
         _this.init = _this.init.bind(_this);
         _this.shareDisplay = _this.shareDisplay.bind(_this);
+        _this.displayAll = _this.displayAll.bind(_this);
         return _this;
     }
     Main.prototype.init = function () {
@@ -48289,10 +48290,14 @@ var Main = /** @class */ (function (_super) {
             setVideo(myClass, stream);
         });
     };
+    Main.prototype.displayAll = function (e) {
+        e.currentTarget.classList.toggle('maxview');
+    };
     Main.prototype.render = function () {
+        var myClass = this;
         var videoList = this.state.videoList.map(function (video, index) {
             var elementId = video.id;
-            return (React.createElement("video", { id: elementId, key: index, className: "video-contents", autoPlay: true, muted: true, playsInline: true }));
+            return (React.createElement("video", { id: elementId, key: index, className: "video-contents", autoPlay: true, muted: true, playsInline: true, onClick: myClass.displayAll }));
         });
         var textList = this.state.textList.map(function (text, index) {
             return (React.createElement("div", { key: index }, text));

@@ -66,6 +66,7 @@ class Main extends React.Component<{ name: string }> {
     this.state = { videoList: [], textList: [], status: '停止中', flagSpeech: false };
     this.init = this.init.bind(this);
     this.shareDisplay = this.shareDisplay.bind(this);
+    this.displayAll = this.displayAll.bind(this);
   }
 
   init() {
@@ -83,7 +84,7 @@ class Main extends React.Component<{ name: string }> {
 
   }
 
-  
+
   shareDisplay() {
 
     const myClass = this;
@@ -98,12 +99,18 @@ class Main extends React.Component<{ name: string }> {
 
   }
 
+  displayAll(e: React.MouseEvent<HTMLVideoElement, MouseEvent>) {
+    e.currentTarget.classList.toggle('maxview');
+  }
+
   render() {
+
+    const myClass = this;
 
     const videoList = this.state.videoList.map(function (video, index) {
       const elementId = video.id;
       return (
-        <video id={elementId} key={index} className="video-contents" autoPlay muted playsInline></video>
+        <video id={elementId} key={index} className="video-contents" autoPlay muted playsInline onClick={myClass.displayAll}></video>
       );
     })
 
