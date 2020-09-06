@@ -69,7 +69,7 @@ class Main extends React.Component<{ name: string }> {
 
   init() {
 
-    const peer: Peer = new Peer(this.name, { key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
+    const peer: Peer = new Peer({ key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
 
     const myClass = this;
     if (connectCount == 0) {
