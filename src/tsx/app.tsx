@@ -5,6 +5,7 @@ import Peer, { SfuRoom, RoomStream } from 'skyway-js';
 const hostId = 'sample-room';
 let connectCount = 0;
 const maxConnectCount = 8;
+let peer: Peer;
 let localStream: MediaStream;
 let room: SfuRoom;
 
@@ -64,12 +65,12 @@ class Main extends React.Component<{ name: string }> {
     this.name = this.props.name;
     this.state = { videoList: [], textList: [], status: '停止中', flagSpeech: false };
     this.init = this.init.bind(this);
-    this.addMember = this.addMember.bind(this);
+    this.shareDisplay = this.shareDisplay.bind(this);
   }
 
   init() {
 
-    const peer: Peer = new Peer({ key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
+    peer = new Peer({ key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
 
     const myClass = this;
     if (connectCount == 0) {
@@ -82,8 +83,19 @@ class Main extends React.Component<{ name: string }> {
 
   }
 
-  addMember(video: { id: string, stream: RoomStream }) {
-    this.setState({ videoList: this.state.videoList.concat(video) });
+  
+  shareDisplay() {
+
+    const myClass = this;
+
+    const mediaDev = navigator.mediaDevices as any;
+    mediaDev.getDisplayMedia().then(
+      function (stream: MediaStream) {
+        room = peer.joinRoom(hostId, { mode: 'sfu', stream: stream });
+        setVideo(myClass, stream);
+      }
+    );
+
   }
 
   render() {
@@ -113,6 +125,7 @@ class Main extends React.Component<{ name: string }> {
         </div>
         <div id="menu-box">
           <div className="button" onClick={this.init}>開始</div>
+          <div className="button" onClick={this.shareDisplay}>画面共有</div>
         </div>
       </div>
     )
@@ -130,7 +143,7 @@ function setVideo(myClass: Main, stream: MediaStream) {
     const videoElement = document.getElementById(elementId);
     if (videoElement instanceof HTMLVideoElement) {
       videoElement.srcObject = stream;
-      videoElement.play();
+      //videoElement.play();
     }
   });
 }
@@ -206,6 +219,7 @@ function setUpSpeech(myClass: Main) {
 
   speech.onresult = function (e) {
     for (var i = e.resultIndex; i < e.results.length; i++) {
+      console.log(e.results);
       if (e.results[i].isFinal) {
         const text: string[] = [myClass.name + ':' + e.results[i][0].transcript];
         room.send({ text: text });

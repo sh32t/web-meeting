@@ -48227,6 +48227,7 @@ var skyway_js_1 = __importDefault(__webpack_require__(/*! skyway-js */ "./node_m
 var hostId = 'sample-room';
 var connectCount = 0;
 var maxConnectCount = 8;
+var peer;
 var localStream;
 var room;
 var Login = /** @class */ (function (_super) {
@@ -48268,11 +48269,11 @@ var Main = /** @class */ (function (_super) {
         _this.name = _this.props.name;
         _this.state = { videoList: [], textList: [], status: '停止中', flagSpeech: false };
         _this.init = _this.init.bind(_this);
-        _this.addMember = _this.addMember.bind(_this);
+        _this.shareDisplay = _this.shareDisplay.bind(_this);
         return _this;
     }
     Main.prototype.init = function () {
-        var peer = new skyway_js_1.default(this.name, { key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
+        peer = new skyway_js_1.default({ key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
         var myClass = this;
         if (connectCount == 0) {
             setVideo(myClass, localStream);
@@ -48280,8 +48281,13 @@ var Main = /** @class */ (function (_super) {
         createRoom(peer, myClass);
         setUpSpeech(myClass);
     };
-    Main.prototype.addMember = function (video) {
-        this.setState({ videoList: this.state.videoList.concat(video) });
+    Main.prototype.shareDisplay = function () {
+        var myClass = this;
+        var mediaDev = navigator.mediaDevices;
+        mediaDev.getDisplayMedia().then(function (stream) {
+            room = peer.joinRoom(hostId, { mode: 'sfu', stream: stream });
+            setVideo(myClass, stream);
+        });
     };
     Main.prototype.render = function () {
         var videoList = this.state.videoList.map(function (video, index) {
@@ -48298,7 +48304,8 @@ var Main = /** @class */ (function (_super) {
                 React.createElement("div", { id: "status" }, this.state.status),
                 React.createElement("div", { id: "text" }, textList)),
             React.createElement("div", { id: "menu-box" },
-                React.createElement("div", { className: "button", onClick: this.init }, "\u958B\u59CB"))));
+                React.createElement("div", { className: "button", onClick: this.init }, "\u958B\u59CB"),
+                React.createElement("div", { className: "button", onClick: this.shareDisplay }, "\u753B\u9762\u5171\u6709"))));
     };
     return Main;
 }(React.Component));
@@ -48311,7 +48318,7 @@ function setVideo(myClass, stream) {
         var videoElement = document.getElementById(elementId);
         if (videoElement instanceof HTMLVideoElement) {
             videoElement.srcObject = stream;
-            videoElement.play();
+            //videoElement.play();
         }
     });
 }
@@ -48349,7 +48356,7 @@ function createRoom(peer, myClass) {
         });
         room.on('data', function (_a) {
             var src = _a.src, data = _a.data;
-            myClass.setState({ textList: myClass.state.textList.concat(src + ':' + data.text) });
+            myClass.setState({ textList: myClass.state.textList.concat(data.text) });
         });
     });
 }
@@ -48376,6 +48383,7 @@ function setUpSpeech(myClass) {
     };
     speech.onresult = function (e) {
         for (var i = e.resultIndex; i < e.results.length; i++) {
+            console.log(e.results);
             if (e.results[i].isFinal) {
                 var text = [myClass.name + ':' + e.results[i][0].transcript];
                 room.send({ text: text });

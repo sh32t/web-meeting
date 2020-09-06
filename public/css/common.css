@@ -72,6 +72,7 @@ body {
   height: 100vh;
   border-left:thin solid black;
   box-sizing: border-box;
+  font-size: 15px;
 }
 
 #menu-box{
