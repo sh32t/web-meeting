@@ -110,7 +110,7 @@ class Main extends React.Component<{ name: string }> {
     const videoList = this.state.videoList.map(function (video, index) {
       const elementId = video.id;
       return (
-        <video id={elementId} key={index} className="video-contents" autoPlay muted playsInline onClick={myClass.displayAll}></video>
+        <video id={elementId} key={index} className="video-contents" autoPlay playsInline onClick={myClass.displayAll}></video>
       );
     })
 
@@ -150,7 +150,7 @@ function setVideo(myClass: Main, stream: MediaStream) {
     const videoElement = document.getElementById(elementId);
     if (videoElement instanceof HTMLVideoElement) {
       videoElement.srcObject = stream;
-      //videoElement.play();
+      videoElement.play();
     }
   });
 }
@@ -162,7 +162,6 @@ function setLocalStream() {
 
       ReactDOM.render(<Login />, document.getElementById('root'));
 
-      // setVideo(localStream, 'host-video');
     }
   ).catch(error => {
     // 失敗時にはエラーログを出力
