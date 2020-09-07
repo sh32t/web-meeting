@@ -48277,7 +48277,7 @@ var Main = /** @class */ (function (_super) {
         peer = new skyway_js_1.default({ key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
         var myClass = this;
         if (connectCount == 0) {
-            setVideo(myClass, localStream);
+            setVideo(myClass, localStream, true);
         }
         createRoom(peer, myClass);
         setUpSpeech(myClass);
@@ -48287,7 +48287,7 @@ var Main = /** @class */ (function (_super) {
         var mediaDev = navigator.mediaDevices;
         mediaDev.getDisplayMedia().then(function (stream) {
             room = peer.joinRoom(hostId, { mode: 'sfu', stream: stream });
-            setVideo(myClass, stream);
+            setVideo(myClass, stream, true);
         });
     };
     Main.prototype.displayAll = function (e) {
@@ -48314,7 +48314,7 @@ var Main = /** @class */ (function (_super) {
     };
     return Main;
 }(React.Component));
-function setVideo(myClass, stream) {
+function setVideo(myClass, stream, isMute) {
     connectCount++;
     var elementId = 'video-' + connectCount;
     var video = [{ id: elementId, stream: stream }];
@@ -48323,6 +48323,7 @@ function setVideo(myClass, stream) {
         var videoElement = document.getElementById(elementId);
         if (videoElement instanceof HTMLVideoElement) {
             videoElement.srcObject = stream;
+            videoElement.muted = isMute;
             videoElement.play();
         }
     });
@@ -48355,7 +48356,7 @@ function createRoom(peer, myClass) {
         });
         room.on('stream', function (roomStream) {
             if (connectCount < maxConnectCount) {
-                setVideo(myClass, roomStream);
+                setVideo(myClass, roomStream, false);
             }
         });
         room.on('data', function (_a) {

@@ -75,7 +75,7 @@ class Main extends React.Component<{ name: string }> {
 
     const myClass = this;
     if (connectCount == 0) {
-      setVideo(myClass, localStream);
+      setVideo(myClass, localStream, true);
     }
 
     createRoom(peer, myClass);
@@ -93,7 +93,7 @@ class Main extends React.Component<{ name: string }> {
     mediaDev.getDisplayMedia().then(
       function (stream: MediaStream) {
         room = peer.joinRoom(hostId, { mode: 'sfu', stream: stream });
-        setVideo(myClass, stream);
+        setVideo(myClass, stream, true);
       }
     );
 
@@ -141,7 +141,7 @@ class Main extends React.Component<{ name: string }> {
 
 }
 
-function setVideo(myClass: Main, stream: MediaStream) {
+function setVideo(myClass: Main, stream: MediaStream, isMute: boolean) {
   connectCount++;
   const elementId = 'video-' + connectCount;
   const video: Video[] = [{ id: elementId, stream: stream }];
@@ -150,6 +150,7 @@ function setVideo(myClass: Main, stream: MediaStream) {
     const videoElement = document.getElementById(elementId);
     if (videoElement instanceof HTMLVideoElement) {
       videoElement.srcObject = stream;
+      videoElement.muted = isMute;
       videoElement.play();
     }
   });
@@ -188,7 +189,7 @@ function createRoom(peer: Peer, myClass: Main) {
     });
     room.on('stream', function (roomStream) {
       if (connectCount < maxConnectCount) {
-        setVideo(myClass, roomStream);
+        setVideo(myClass, roomStream, false);
       }
     });
     room.on('data', ({ src, data }) => {
