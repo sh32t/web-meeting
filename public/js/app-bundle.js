@@ -48297,7 +48297,7 @@ var Main = /** @class */ (function (_super) {
         var myClass = this;
         var videoList = this.state.videoList.map(function (video, index) {
             var elementId = video.id;
-            return (React.createElement("video", { id: elementId, key: index, className: "video-contents", autoPlay: true, muted: true, playsInline: true, onClick: myClass.displayAll }));
+            return (React.createElement("video", { id: elementId, key: index, className: "video-contents", autoPlay: true, playsInline: true, onClick: myClass.displayAll }));
         });
         var textList = this.state.textList.map(function (text, index) {
             return (React.createElement("div", { key: index }, text));
@@ -48323,7 +48323,7 @@ function setVideo(myClass, stream) {
         var videoElement = document.getElementById(elementId);
         if (videoElement instanceof HTMLVideoElement) {
             videoElement.srcObject = stream;
-            //videoElement.play();
+            videoElement.play();
         }
     });
 }
@@ -48331,7 +48331,6 @@ function setLocalStream() {
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(function (stream) {
         localStream = stream;
         ReactDOM.render(React.createElement(Login, null), document.getElementById('root'));
-        // setVideo(localStream, 'host-video');
     }).catch(function (error) {
         // 失敗時にはエラーログを出力
         console.error('mediaDevice.getUserMedia() error:', error);
