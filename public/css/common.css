@@ -73,6 +73,8 @@ body {
   left: 0;
   width: 100vw;
   height: 100vh;
+  background-color: white;
+  z-index: 1;
 }
 
 #minutes-box {
@@ -81,6 +83,7 @@ body {
   border-left:thin solid black;
   box-sizing: border-box;
   font-size: 15px;
+  overflow-y: scroll;
 }
 
 #menu-box{
@@ -88,6 +91,11 @@ body {
   bottom: 0;
   width: 100vw;
   height: 10vh;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 2;
 }
 
 #title{
