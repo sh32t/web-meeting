@@ -86,6 +86,112 @@
 /************************************************************************/
 /******/ ({
 
+/***/ "./node_modules/decode-uri-component/index.js":
+/*!****************************************************!*\
+  !*** ./node_modules/decode-uri-component/index.js ***!
+  \****************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var token = '%[a-f0-9]{2}';
+var singleMatcher = new RegExp(token, 'gi');
+var multiMatcher = new RegExp('(' + token + ')+', 'gi');
+
+function decodeComponents(components, split) {
+	try {
+		// Try to decode the entire string first
+		return decodeURIComponent(components.join(''));
+	} catch (err) {
+		// Do nothing
+	}
+
+	if (components.length === 1) {
+		return components;
+	}
+
+	split = split || 1;
+
+	// Split the array in 2 parts
+	var left = components.slice(0, split);
+	var right = components.slice(split);
+
+	return Array.prototype.concat.call([], decodeComponents(left), decodeComponents(right));
+}
+
+function decode(input) {
+	try {
+		return decodeURIComponent(input);
+	} catch (err) {
+		var tokens = input.match(singleMatcher);
+
+		for (var i = 1; i < tokens.length; i++) {
+			input = decodeComponents(tokens, i).join('');
+
+			tokens = input.match(singleMatcher);
+		}
+
+		return input;
+	}
+}
+
+function customDecodeURIComponent(input) {
+	// Keep track of all the replacements and prefill the map with the `BOM`
+	var replaceMap = {
+		'%FE%FF': '\uFFFD\uFFFD',
+		'%FF%FE': '\uFFFD\uFFFD'
+	};
+
+	var match = multiMatcher.exec(input);
+	while (match) {
+		try {
+			// Decode as big chunks as possible
+			replaceMap[match[0]] = decodeURIComponent(match[0]);
+		} catch (err) {
+			var result = decode(match[0]);
+
+			if (result !== match[0]) {
+				replaceMap[match[0]] = result;
+			}
+		}
+
+		match = multiMatcher.exec(input);
+	}
+
+	// Add `%C2` at the end of the map to make sure it does not replace the combinator before everything else
+	replaceMap['%C2'] = '\uFFFD';
+
+	var entries = Object.keys(replaceMap);
+
+	for (var i = 0; i < entries.length; i++) {
+		// Replace all decoded components
+		var key = entries[i];
+		input = input.replace(new RegExp(key, 'g'), replaceMap[key]);
+	}
+
+	return input;
+}
+
+module.exports = function (encodedURI) {
+	if (typeof encodedURI !== 'string') {
+		throw new TypeError('Expected `encodedURI` to be of type `string`, got `' + typeof encodedURI + '`');
+	}
+
+	try {
+		encodedURI = encodedURI.replace(/\+/g, ' ');
+
+		// Try the built in decoder first
+		return decodeURIComponent(encodedURI);
+	} catch (err) {
+		// Fallback to a more advanced decoder
+		return customDecodeURIComponent(encodedURI);
+	}
+};
+
+
+/***/ }),
+
 /***/ "./node_modules/object-assign/index.js":
 /*!*********************************************!*\
   !*** ./node_modules/object-assign/index.js ***!
@@ -322,6 +428,396 @@ module.exports = checkPropTypes;
 var ReactPropTypesSecret = 'SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED';
 
 module.exports = ReactPropTypesSecret;
+
+
+/***/ }),
+
+/***/ "./node_modules/query-string/index.js":
+/*!********************************************!*\
+  !*** ./node_modules/query-string/index.js ***!
+  \********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+const strictUriEncode = __webpack_require__(/*! strict-uri-encode */ "./node_modules/strict-uri-encode/index.js");
+const decodeComponent = __webpack_require__(/*! decode-uri-component */ "./node_modules/decode-uri-component/index.js");
+const splitOnFirst = __webpack_require__(/*! split-on-first */ "./node_modules/split-on-first/index.js");
+
+const isNullOrUndefined = value => value === null || value === undefined;
+
+function encoderForArrayFormat(options) {
+	switch (options.arrayFormat) {
+		case 'index':
+			return key => (result, value) => {
+				const index = result.length;
+
+				if (
+					value === undefined ||
+					(options.skipNull && value === null) ||
+					(options.skipEmptyString && value === '')
+				) {
+					return result;
+				}
+
+				if (value === null) {
+					return [...result, [encode(key, options), '[', index, ']'].join('')];
+				}
+
+				return [
+					...result,
+					[encode(key, options), '[', encode(index, options), ']=', encode(value, options)].join('')
+				];
+			};
+
+		case 'bracket':
+			return key => (result, value) => {
+				if (
+					value === undefined ||
+					(options.skipNull && value === null) ||
+					(options.skipEmptyString && value === '')
+				) {
+					return result;
+				}
+
+				if (value === null) {
+					return [...result, [encode(key, options), '[]'].join('')];
+				}
+
+				return [...result, [encode(key, options), '[]=', encode(value, options)].join('')];
+			};
+
+		case 'comma':
+		case 'separator':
+			return key => (result, value) => {
+				if (value === null || value === undefined || value.length === 0) {
+					return result;
+				}
+
+				if (result.length === 0) {
+					return [[encode(key, options), '=', encode(value, options)].join('')];
+				}
+
+				return [[result, encode(value, options)].join(options.arrayFormatSeparator)];
+			};
+
+		default:
+			return key => (result, value) => {
+				if (
+					value === undefined ||
+					(options.skipNull && value === null) ||
+					(options.skipEmptyString && value === '')
+				) {
+					return result;
+				}
+
+				if (value === null) {
+					return [...result, encode(key, options)];
+				}
+
+				return [...result, [encode(key, options), '=', encode(value, options)].join('')];
+			};
+	}
+}
+
+function parserForArrayFormat(options) {
+	let result;
+
+	switch (options.arrayFormat) {
+		case 'index':
+			return (key, value, accumulator) => {
+				result = /\[(\d*)\]$/.exec(key);
+
+				key = key.replace(/\[\d*\]$/, '');
+
+				if (!result) {
+					accumulator[key] = value;
+					return;
+				}
+
+				if (accumulator[key] === undefined) {
+					accumulator[key] = {};
+				}
+
+				accumulator[key][result[1]] = value;
+			};
+
+		case 'bracket':
+			return (key, value, accumulator) => {
+				result = /(\[\])$/.exec(key);
+				key = key.replace(/\[\]$/, '');
+
+				if (!result) {
+					accumulator[key] = value;
+					return;
+				}
+
+				if (accumulator[key] === undefined) {
+					accumulator[key] = [value];
+					return;
+				}
+
+				accumulator[key] = [].concat(accumulator[key], value);
+			};
+
+		case 'comma':
+		case 'separator':
+			return (key, value, accumulator) => {
+				const isArray = typeof value === 'string' && value.split('').indexOf(options.arrayFormatSeparator) > -1;
+				const newValue = isArray ? value.split(options.arrayFormatSeparator).map(item => decode(item, options)) : value === null ? value : decode(value, options);
+				accumulator[key] = newValue;
+			};
+
+		default:
+			return (key, value, accumulator) => {
+				if (accumulator[key] === undefined) {
+					accumulator[key] = value;
+					return;
+				}
+
+				accumulator[key] = [].concat(accumulator[key], value);
+			};
+	}
+}
+
+function validateArrayFormatSeparator(value) {
+	if (typeof value !== 'string' || value.length !== 1) {
+		throw new TypeError('arrayFormatSeparator must be single character string');
+	}
+}
+
+function encode(value, options) {
+	if (options.encode) {
+		return options.strict ? strictUriEncode(value) : encodeURIComponent(value);
+	}
+
+	return value;
+}
+
+function decode(value, options) {
+	if (options.decode) {
+		return decodeComponent(value);
+	}
+
+	return value;
+}
+
+function keysSorter(input) {
+	if (Array.isArray(input)) {
+		return input.sort();
+	}
+
+	if (typeof input === 'object') {
+		return keysSorter(Object.keys(input))
+			.sort((a, b) => Number(a) - Number(b))
+			.map(key => input[key]);
+	}
+
+	return input;
+}
+
+function removeHash(input) {
+	const hashStart = input.indexOf('#');
+	if (hashStart !== -1) {
+		input = input.slice(0, hashStart);
+	}
+
+	return input;
+}
+
+function getHash(url) {
+	let hash = '';
+	const hashStart = url.indexOf('#');
+	if (hashStart !== -1) {
+		hash = url.slice(hashStart);
+	}
+
+	return hash;
+}
+
+function extract(input) {
+	input = removeHash(input);
+	const queryStart = input.indexOf('?');
+	if (queryStart === -1) {
+		return '';
+	}
+
+	return input.slice(queryStart + 1);
+}
+
+function parseValue(value, options) {
+	if (options.parseNumbers && !Number.isNaN(Number(value)) && (typeof value === 'string' && value.trim() !== '')) {
+		value = Number(value);
+	} else if (options.parseBooleans && value !== null && (value.toLowerCase() === 'true' || value.toLowerCase() === 'false')) {
+		value = value.toLowerCase() === 'true';
+	}
+
+	return value;
+}
+
+function parse(input, options) {
+	options = Object.assign({
+		decode: true,
+		sort: true,
+		arrayFormat: 'none',
+		arrayFormatSeparator: ',',
+		parseNumbers: false,
+		parseBooleans: false
+	}, options);
+
+	validateArrayFormatSeparator(options.arrayFormatSeparator);
+
+	const formatter = parserForArrayFormat(options);
+
+	// Create an object with no prototype
+	const ret = Object.create(null);
+
+	if (typeof input !== 'string') {
+		return ret;
+	}
+
+	input = input.trim().replace(/^[?#&]/, '');
+
+	if (!input) {
+		return ret;
+	}
+
+	for (const param of input.split('&')) {
+		let [key, value] = splitOnFirst(options.decode ? param.replace(/\+/g, ' ') : param, '=');
+
+		// Missing `=` should be `null`:
+		// http://w3.org/TR/2012/WD-url-20120524/#collect-url-parameters
+		value = value === undefined ? null : ['comma', 'separator'].includes(options.arrayFormat) ? value : decode(value, options);
+		formatter(decode(key, options), value, ret);
+	}
+
+	for (const key of Object.keys(ret)) {
+		const value = ret[key];
+		if (typeof value === 'object' && value !== null) {
+			for (const k of Object.keys(value)) {
+				value[k] = parseValue(value[k], options);
+			}
+		} else {
+			ret[key] = parseValue(value, options);
+		}
+	}
+
+	if (options.sort === false) {
+		return ret;
+	}
+
+	return (options.sort === true ? Object.keys(ret).sort() : Object.keys(ret).sort(options.sort)).reduce((result, key) => {
+		const value = ret[key];
+		if (Boolean(value) && typeof value === 'object' && !Array.isArray(value)) {
+			// Sort object keys, not values
+			result[key] = keysSorter(value);
+		} else {
+			result[key] = value;
+		}
+
+		return result;
+	}, Object.create(null));
+}
+
+exports.extract = extract;
+exports.parse = parse;
+
+exports.stringify = (object, options) => {
+	if (!object) {
+		return '';
+	}
+
+	options = Object.assign({
+		encode: true,
+		strict: true,
+		arrayFormat: 'none',
+		arrayFormatSeparator: ','
+	}, options);
+
+	validateArrayFormatSeparator(options.arrayFormatSeparator);
+
+	const shouldFilter = key => (
+		(options.skipNull && isNullOrUndefined(object[key])) ||
+		(options.skipEmptyString && object[key] === '')
+	);
+
+	const formatter = encoderForArrayFormat(options);
+
+	const objectCopy = {};
+
+	for (const key of Object.keys(object)) {
+		if (!shouldFilter(key)) {
+			objectCopy[key] = object[key];
+		}
+	}
+
+	const keys = Object.keys(objectCopy);
+
+	if (options.sort !== false) {
+		keys.sort(options.sort);
+	}
+
+	return keys.map(key => {
+		const value = object[key];
+
+		if (value === undefined) {
+			return '';
+		}
+
+		if (value === null) {
+			return encode(key, options);
+		}
+
+		if (Array.isArray(value)) {
+			return value
+				.reduce(formatter(key), [])
+				.join('&');
+		}
+
+		return encode(key, options) + '=' + encode(value, options);
+	}).filter(x => x.length > 0).join('&');
+};
+
+exports.parseUrl = (input, options) => {
+	options = Object.assign({
+		decode: true
+	}, options);
+
+	const [url, hash] = splitOnFirst(input, '#');
+
+	return Object.assign(
+		{
+			url: url.split('?')[0] || '',
+			query: parse(extract(input), options)
+		},
+		options && options.parseFragmentIdentifier && hash ? {fragmentIdentifier: decode(hash, options)} : {}
+	);
+};
+
+exports.stringifyUrl = (input, options) => {
+	options = Object.assign({
+		encode: true,
+		strict: true
+	}, options);
+
+	const url = removeHash(input.url).split('?')[0] || '';
+	const queryFromUrl = exports.extract(input.url);
+	const parsedQueryFromUrl = exports.parse(queryFromUrl, {sort: false});
+
+	const query = Object.assign(parsedQueryFromUrl, input.query);
+	let queryString = exports.stringify(query, options);
+	if (queryString) {
+		queryString = `?${queryString}`;
+	}
+
+	let hash = getHash(input.url);
+	if (input.fragmentIdentifier) {
+		hash = `#${encode(input.fragmentIdentifier, options)}`;
+	}
+
+	return `${url}${queryString}${hash}`;
+};
 
 
 /***/ }),
@@ -48176,10 +48672,203 @@ class peer_Peer extends events_default.a {
 
 /***/ }),
 
+/***/ "./node_modules/split-on-first/index.js":
+/*!**********************************************!*\
+  !*** ./node_modules/split-on-first/index.js ***!
+  \**********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = (string, separator) => {
+	if (!(typeof string === 'string' && typeof separator === 'string')) {
+		throw new TypeError('Expected the arguments to be of type `string`');
+	}
+
+	if (separator === '') {
+		return [string];
+	}
+
+	const separatorIndex = string.indexOf(separator);
+
+	if (separatorIndex === -1) {
+		return [string];
+	}
+
+	return [
+		string.slice(0, separatorIndex),
+		string.slice(separatorIndex + separator.length)
+	];
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/strict-uri-encode/index.js":
+/*!*************************************************!*\
+  !*** ./node_modules/strict-uri-encode/index.js ***!
+  \*************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+module.exports = str => encodeURIComponent(str).replace(/[!'()*]/g, x => `%${x.charCodeAt(0).toString(16).toUpperCase()}`);
+
+
+/***/ }),
+
 /***/ "./src/tsx/app.tsx":
 /*!*************************!*\
   !*** ./src/tsx/app.tsx ***!
   \*************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+var React = __importStar(__webpack_require__(/*! react */ "./node_modules/react/index.js"));
+var ReactDOM = __importStar(__webpack_require__(/*! react-dom */ "./node_modules/react-dom/index.js"));
+var query_string_1 = __importDefault(__webpack_require__(/*! query-string */ "./node_modules/query-string/index.js"));
+var login_1 = __webpack_require__(/*! tsx/parts/login */ "./src/tsx/parts/login.tsx");
+// URLからルームIDを取得
+var url = location.href;
+var wmUrl = query_string_1.default.parseUrl(url);
+var roomId = '';
+if (typeof wmUrl.query.roomId == 'string') {
+    roomId = wmUrl.query.roomId;
+}
+// URLにルームIDが指定されている⇒ゲスト
+// URLにルームIDが指定されていない⇒オーナー
+ReactDOM.render(React.createElement(login_1.Login, { roomId: roomId }), document.getElementById('root'));
+
+
+/***/ }),
+
+/***/ "./src/tsx/parts/login.tsx":
+/*!*********************************!*\
+  !*** ./src/tsx/parts/login.tsx ***!
+  \*********************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Login = void 0;
+var React = __importStar(__webpack_require__(/*! react */ "./node_modules/react/index.js"));
+var ReactDOM = __importStar(__webpack_require__(/*! react-dom */ "./node_modules/react-dom/index.js"));
+var main_1 = __webpack_require__(/*! tsx/parts/main */ "./src/tsx/parts/main.tsx");
+var Login = /** @class */ (function (_super) {
+    __extends(Login, _super);
+    // 初期処理
+    function Login(props) {
+        var _this = _super.call(this, props) || this;
+        _this.state = {
+            // ルームID
+            roomId: props.roomId
+            // 名前
+            ,
+            name: ''
+        };
+        // バインドすることでthisを使用可能にする
+        _this.enter = _this.enter.bind(_this);
+        _this.changeRoomId = _this.changeRoomId.bind(_this);
+        _this.changeName = _this.changeName.bind(_this);
+        return _this;
+    }
+    // 画面のレンダリング
+    Login.prototype.render = function () {
+        return (React.createElement("div", { id: "login" },
+            React.createElement("div", { id: "room-id-box" },
+                React.createElement("span", { className: "label" }, "\u30EB\u30FC\u30E0ID\uFF1A"),
+                React.createElement("input", { type: "text", value: this.state.roomId, onChange: this.changeRoomId })),
+            React.createElement("div", { id: "name-box" },
+                React.createElement("span", { className: "label" }, "\u540D\u524D\uFF1A"),
+                React.createElement("input", { type: "text", value: this.state.name, onChange: this.changeName })),
+            React.createElement("div", { className: "button", onClick: this.enter }, "\u53C2\u52A0")));
+    };
+    // 参加ボタンクリック
+    Login.prototype.enter = function () {
+        // メイン画面へ遷移
+        ReactDOM.render(React.createElement(main_1.Main, { roomId: this.state.roomId, name: this.state.name }), document.getElementById('root'));
+    };
+    // ルームIDの変更
+    Login.prototype.changeRoomId = function (event) {
+        this.setState({ roomId: event.target.value });
+    };
+    // 名前の変更
+    Login.prototype.changeName = function (event) {
+        this.setState({ name: event.target.value });
+    };
+    return Login;
+}(React.Component));
+exports.Login = Login;
+
+
+/***/ }),
+
+/***/ "./src/tsx/parts/main.tsx":
+/*!********************************!*\
+  !*** ./src/tsx/parts/main.tsx ***!
+  \********************************/
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -48221,191 +48910,298 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Main = void 0;
 var React = __importStar(__webpack_require__(/*! react */ "./node_modules/react/index.js"));
-var ReactDOM = __importStar(__webpack_require__(/*! react-dom */ "./node_modules/react-dom/index.js"));
 var skyway_js_1 = __importDefault(__webpack_require__(/*! skyway-js */ "./node_modules/skyway-js/dist/skyway.js"));
-var hostId = 'sample-room';
-var connectCount = 0;
-var maxConnectCount = 8;
-var peer;
-var localStream;
-var room;
-var Login = /** @class */ (function (_super) {
-    __extends(Login, _super);
-    function Login(props) {
-        var _this = _super.call(this, props) || this;
-        _this.name = React.createRef();
-        _this.state = { val: '' };
-        _this.enter = _this.enter.bind(_this);
-        _this.handleChange = _this.handleChange.bind(_this);
-        return _this;
-    }
-    Login.prototype.enter = function () {
-        var _a, _b;
-        var name = 'guest';
-        if (((_a = this.name.current) === null || _a === void 0 ? void 0 : _a.value) != undefined) {
-            name = (_b = this.name.current) === null || _b === void 0 ? void 0 : _b.value;
-        }
-        ReactDOM.render(React.createElement(Main, { name: name }), document.getElementById('root'));
-    };
-    Login.prototype.handleChange = function (event) {
-        this.setState({
-            val: event.target.value
-        });
-    };
-    Login.prototype.render = function () {
-        return (React.createElement("div", { id: "login" },
-            React.createElement("div", { id: "name-box" },
-                React.createElement("span", { className: "label" }, "\u540D\u524D\uFF1A"),
-                React.createElement("input", { type: "text", ref: this.name, value: this.state.val, onChange: this.handleChange })),
-            React.createElement("div", { className: "button", onClick: this.enter }, "\u53C2\u52A0")));
-    };
-    return Login;
-}(React.Component));
 var Main = /** @class */ (function (_super) {
     __extends(Main, _super);
+    // 初回処理
     function Main(props) {
         var _this = _super.call(this, props) || this;
-        _this.name = _this.props.name;
-        _this.state = { videoList: [], textList: [], status: '停止中', flagSpeech: false };
-        _this.init = _this.init.bind(_this);
-        _this.shareDisplay = _this.shareDisplay.bind(_this);
-        _this.displayAll = _this.displayAll.bind(_this);
+        _this.MAX_CONNECTION_COUNT = 8;
+        _this.localStream = new MediaStream();
+        _this.localDisplayStream = new MediaStream();
+        _this.peer = null;
+        _this.displayPeer = null;
+        _this.room = null;
+        _this.displayRoom = null;
+        _this.state = {
+            videoList: [],
+            textList: [],
+            isSpeech: false,
+            speechStatus: '停止中',
+            startButton: '開始',
+            microphoneButton: 'マイクOFF',
+            cameraButton: 'カメラOFF',
+            shareDisplayButton: '画面共有ON'
+        };
+        // 自端末のストリームをセット
+        _this.setLocalStream();
+        // バインドすることでthisを使用可能にする
+        _this.switchRoom = _this.switchRoom.bind(_this);
+        _this.switchMicrophone = _this.switchMicrophone.bind(_this);
+        _this.switchCamera = _this.switchCamera.bind(_this);
+        _this.switchShareDisplay = _this.switchShareDisplay.bind(_this);
+        _this.setLocalStream = _this.setLocalStream.bind(_this);
+        _this.setVideo = _this.setVideo.bind(_this);
+        _this.setUpRoom = _this.setUpRoom.bind(_this);
+        _this.setUpSpeech = _this.setUpSpeech.bind(_this);
         return _this;
     }
-    Main.prototype.init = function () {
-        peer = new skyway_js_1.default({ key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
-        var myClass = this;
-        if (connectCount == 0) {
-            setVideo(myClass, localStream, true);
-        }
-        createRoom(peer, myClass);
-        setUpSpeech(myClass);
-    };
-    Main.prototype.shareDisplay = function () {
-        var myClass = this;
-        var mediaDev = navigator.mediaDevices;
-        mediaDev.getDisplayMedia().then(function (stream) {
-            room = peer.joinRoom(hostId, { mode: 'sfu', stream: stream });
-            setVideo(myClass, stream, true);
-        });
-    };
-    Main.prototype.displayAll = function (e) {
-        e.currentTarget.classList.toggle('maxview');
-    };
     Main.prototype.render = function () {
+        // thisをコールバック関数で使用するための処理
         var myClass = this;
-        var videoList = this.state.videoList.map(function (video, index) {
-            var elementId = video.id;
-            return (React.createElement("video", { id: elementId, key: index, className: "video-contents", autoPlay: true, playsInline: true, onClick: myClass.displayAll }));
+        // ビデオリストの描画
+        var videoList = myClass.state.videoList.map(function (video, index) {
+            return (React.createElement("video", { id: video.id, key: index, className: "video-contents", autoPlay: true, playsInline: true, onClick: myClass.switchDisplayAll }));
         });
-        var textList = this.state.textList.map(function (text, index) {
+        // 議事録テキストの描画
+        var textList = myClass.state.textList.map(function (text, index) {
             return (React.createElement("div", { key: index }, text));
         });
+        // 全体の描画
         return (React.createElement("div", { id: "main" },
             React.createElement("div", { id: "video-box" }, videoList),
             React.createElement("div", { id: "minutes-box" },
                 React.createElement("div", { id: "title" }, "\u8B70\u4E8B\u9332"),
-                React.createElement("div", { id: "status" }, this.state.status),
+                React.createElement("div", { id: "status" }, myClass.state.speechStatus),
                 React.createElement("div", { id: "text" }, textList)),
             React.createElement("div", { id: "menu-box" },
-                React.createElement("div", { className: "button", onClick: this.init }, "\u958B\u59CB"),
-                React.createElement("div", { className: "button", onClick: this.shareDisplay }, "\u753B\u9762\u5171\u6709"))));
+                React.createElement("div", { className: "button", onClick: myClass.switchRoom }, myClass.state.startButton),
+                React.createElement("div", { className: "button", onClick: myClass.switchMicrophone }, myClass.state.microphoneButton),
+                React.createElement("div", { className: "button", onClick: myClass.switchCamera }, myClass.state.cameraButton),
+                React.createElement("div", { className: "button", onClick: myClass.switchShareDisplay }, myClass.state.shareDisplayButton))));
+    };
+    // 入退室の切り替え
+    Main.prototype.switchRoom = function () {
+        var _a, _b;
+        var myClass = this;
+        if (myClass.state.startButton == '終了') {
+            (_a = myClass.room) === null || _a === void 0 ? void 0 : _a.close();
+            myClass.setState({ videoList: [] });
+            // 画面共有している場合は、画面共有も接続を切る
+            if (myClass.state.shareDisplayButton == '画面共有OFF') {
+                myClass.setState({ startButton: '開始', shareDisplayButton: '画面共有ON' });
+                (_b = myClass.displayRoom) === null || _b === void 0 ? void 0 : _b.close();
+                myClass.localDisplayStream.getVideoTracks()[0].stop();
+            }
+            else {
+                myClass.setState({ startButton: '開始' });
+            }
+        }
+        else {
+            myClass.setState({ startButton: '終了' });
+            // ルーム接続機能を操作するためのオブジェクトを取得
+            myClass.peer = new skyway_js_1.default({ key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
+            myClass.peer.on('open', function () {
+                var _a, _b;
+                // PeerIDを設定、要素のIDとなる
+                if (myClass.peer != null) {
+                    myClass.localStream.peerId = (_a = myClass.peer) === null || _a === void 0 ? void 0 : _a.id;
+                    console.log('My Peer ID:' + ((_b = myClass.peer) === null || _b === void 0 ? void 0 : _b.id));
+                }
+                // 自分のビデオはミュート
+                var isMute = true;
+                myClass.setVideo(myClass.localStream, isMute);
+                // ルームのセットアップ
+                myClass.setUpRoom();
+                // 音声認識のセットアップ
+                myClass.setUpSpeech();
+            });
+        }
+    };
+    ;
+    // マイクのON・OFF切り替え
+    Main.prototype.switchMicrophone = function () {
+        if (this.localStream.getAudioTracks()[0].enabled) {
+            this.setState({ microphoneButton: 'マイクON' });
+            this.localStream.getAudioTracks()[0].enabled = false;
+        }
+        else {
+            this.setState({ microphoneButton: 'マイクOFF' });
+            this.localStream.getAudioTracks()[0].enabled = true;
+        }
+    };
+    // カメラのON・OFF切り替え
+    Main.prototype.switchCamera = function () {
+        if (this.localStream.getVideoTracks()[0].enabled) {
+            this.setState({ cameraButton: 'カメラON' });
+            this.localStream.getVideoTracks()[0].enabled = false;
+        }
+        else {
+            this.setState({ cameraButton: 'カメラOFF' });
+            this.localStream.getVideoTracks()[0].enabled = true;
+        }
+    };
+    // 画面共有のON・OFF切り替え
+    Main.prototype.switchShareDisplay = function () {
+        var _a;
+        var myClass = this;
+        if (myClass.state.shareDisplayButton == '画面共有OFF') {
+            myClass.setState({ shareDisplayButton: '画面共有ON' });
+            (_a = myClass.displayRoom) === null || _a === void 0 ? void 0 : _a.close();
+            myClass.localDisplayStream.getVideoTracks()[0].stop();
+        }
+        else {
+            myClass.setState({ shareDisplayButton: '画面共有OFF' });
+            myClass.displayPeer = new skyway_js_1.default({ key: 'f9e9b17f-474a-4576-a93a-c86f6453314e' });
+            myClass.displayPeer.on('open', function () {
+                // ディスプレイにアクセス
+                var mediaDev = navigator.mediaDevices;
+                mediaDev.getDisplayMedia().then(function (displayStream) {
+                    // ローカルディスプレイを保持
+                    myClass.localDisplayStream = displayStream;
+                    if (myClass.room != null && myClass.displayPeer != null) {
+                        myClass.localDisplayStream.peerId = myClass.displayPeer.id;
+                        myClass.displayRoom = myClass.displayPeer.joinRoom(myClass.props.roomId, { mode: 'sfu', stream: myClass.localDisplayStream });
+                    }
+                    // 共有終了時の処理
+                    myClass.localDisplayStream.getVideoTracks()[0].onended = function (event) {
+                        myClass.switchShareDisplay();
+                    };
+                });
+            });
+        }
+    };
+    ;
+    // 全表示のON・OFF切り替え
+    Main.prototype.switchDisplayAll = function (event) {
+        event.currentTarget.classList.toggle('maxview');
+    };
+    ;
+    // ローカルストリームのセット
+    Main.prototype.setLocalStream = function () {
+        var myClass = this;
+        // カメラやマイクにアクセス
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(function (stream) {
+            // ローカルストリームからマイクやカメラのON・OFFを制御するためにオブジェクトを保持する
+            myClass.localStream = stream;
+        }).catch(function (error) {
+            console.error('mediaDevice.getUserMedia() error:', error);
+        });
+    };
+    // ビデオを画面に追加
+    Main.prototype.setVideo = function (stream, isMute) {
+        var myClass = this;
+        var video = {
+            id: stream.peerId,
+            stream: stream
+        };
+        // videoタグを追加
+        myClass.setState({ videoList: myClass.state.videoList.concat([video]) }, function () {
+            console.log(stream.peerId + ' set');
+            // レンダリング終了後にDOMを取得する
+            var videoElement = document.getElementById(stream.peerId);
+            if (videoElement instanceof HTMLVideoElement) {
+                videoElement.srcObject = stream;
+                videoElement.muted = isMute;
+                videoElement.play();
+            }
+        });
+    };
+    // ルームのイベント処理を記述
+    Main.prototype.setUpRoom = function () {
+        var myClass = this;
+        var peer = myClass.peer;
+        // ルーム作成
+        myClass.room = peer === null || peer === void 0 ? void 0 : peer.joinRoom(myClass.props.roomId, { mode: 'sfu', stream: myClass.localStream });
+        if (myClass.room != null) {
+            // ルームの開始イベント
+            myClass.room.on('open', function () {
+                console.log(myClass.props.roomId + ' open');
+            });
+            // ルームの終了イベント
+            myClass.room.on('close', function () {
+                console.log(myClass.props.roomId + ' close');
+            });
+            // メンバーの入室イベント
+            myClass.room.on('peerJoin', function (peerId) {
+                console.log(peerId + ' join');
+            });
+            // メンバーの退室イベント
+            myClass.room.on('peerLeave', function (peerId) {
+                console.log(peerId + ' leave');
+                // 指定されたIDを除外して配列を作り直す
+                var newVideoList = myClass.state.videoList.filter(function (video) {
+                    if (peerId == video.id) {
+                        return video;
+                    }
+                });
+                // ビデオリストを更新
+                myClass.setState({ videoList: newVideoList });
+            });
+            // 動画や音声データの受信イベント
+            myClass.room.on('stream', function (roomStream) {
+                //　レイアウトの都合で8台以上はビデオを追加しない
+                if (myClass.state.videoList.length < myClass.MAX_CONNECTION_COUNT) {
+                    // 他人の音声はミュートしない
+                    var isMute = false;
+                    myClass.setVideo(roomStream, isMute);
+                }
+            });
+            // データの受信イベント
+            myClass.room.on('data', function (_a) {
+                var src = _a.src, data = _a.data;
+                // 発言を受け取って議事録に書き込む
+                myClass.setState({ textList: myClass.state.textList.concat(data.text) });
+            });
+        }
+    };
+    // 議事録作成のセットアップ
+    Main.prototype.setUpSpeech = function () {
+        var myClass = this;
+        var speech = new webkitSpeechRecognition();
+        // 日本語を認識させる
+        speech.lang = 'ja-JP';
+        // 音声認識にイベント
+        speech.onsoundstart = function () {
+            myClass.setState({ speechStatus: '認識中' });
+        };
+        // 認識できない音声のイベント
+        speech.onnomatch = function () {
+            myClass.setState({ speechStatus: 'もう一度試してください' });
+        };
+        // エラーイベント
+        speech.onerror = function () {
+            myClass.setState({ speechStatus: 'エラー' }, function () {
+                if (myClass.state.isSpeech == false) {
+                    myClass.setUpSpeech();
+                }
+            });
+        };
+        // 音声が止まった時のイベント
+        speech.onsoundend = function () {
+            myClass.setState({ speechStatus: '停止中' }, function () {
+                myClass.setUpSpeech();
+            });
+        };
+        // 音声解析終了時のイベント
+        speech.onresult = function (event) {
+            var _a;
+            for (var i = event.resultIndex; i < event.results.length; i++) {
+                // 最後の解析結果を判定
+                if (event.results[i].isFinal) {
+                    // [名前]：[発言]
+                    var text = [myClass.props.name + ':' + event.results[i][0].transcript];
+                    // データとしてルームの参加者へ送信する
+                    (_a = myClass.room) === null || _a === void 0 ? void 0 : _a.send({ text: text });
+                    // 自分の議事録に追記する
+                    myClass.setState({ textList: myClass.state.textList.concat(text) }, function () {
+                        myClass.setUpSpeech();
+                    });
+                }
+                else {
+                    myClass.setState({ isSpeech: true });
+                }
+            }
+        };
+        myClass.setState({ isSpeech: false }, function () {
+            speech.start();
+        });
     };
     return Main;
 }(React.Component));
-function setVideo(myClass, stream, isMute) {
-    connectCount++;
-    var elementId = 'video-' + connectCount;
-    var video = [{ id: elementId, stream: stream }];
-    myClass.setState({ videoList: myClass.state.videoList.concat(video) }, function () {
-        console.log(elementId + ' set');
-        var videoElement = document.getElementById(elementId);
-        if (videoElement instanceof HTMLVideoElement) {
-            videoElement.srcObject = stream;
-            videoElement.muted = isMute;
-            videoElement.play();
-        }
-    });
-}
-function setLocalStream() {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(function (stream) {
-        localStream = stream;
-        ReactDOM.render(React.createElement(Login, null), document.getElementById('root'));
-    }).catch(function (error) {
-        // 失敗時にはエラーログを出力
-        console.error('mediaDevice.getUserMedia() error:', error);
-    });
-}
-function createRoom(peer, myClass) {
-    peer.on('open', function () {
-        // ルーム作成
-        room = peer.joinRoom(hostId, { mode: 'sfu', stream: localStream });
-        room.on('open', function () {
-            console.log(hostId + ' open');
-        });
-        room.on('close', function () {
-            console.log(hostId + ' close');
-        });
-        // クライアント参加
-        room.on('peerJoin', function (peerId) {
-            console.log(peerId + ' join');
-        });
-        room.on('peerLeave', function (peerId) {
-            console.log(peerId + ' leave');
-        });
-        room.on('stream', function (roomStream) {
-            if (connectCount < maxConnectCount) {
-                setVideo(myClass, roomStream, false);
-            }
-        });
-        room.on('data', function (_a) {
-            var src = _a.src, data = _a.data;
-            myClass.setState({ textList: myClass.state.textList.concat(data.text) });
-        });
-    });
-}
-function setUpSpeech(myClass) {
-    var speech = new webkitSpeechRecognition();
-    speech.lang = 'ja-JP';
-    speech.onsoundstart = function (e) {
-        myClass.setState({ status: '認識中' });
-    };
-    speech.onnomatch = function () {
-        myClass.setState({ status: 'もう一度試してください' });
-    };
-    speech.onerror = function (e) {
-        myClass.setState({ status: 'エラー' }, function () {
-            if (myClass.state.flagSpeech == false) {
-                setUpSpeech(myClass);
-            }
-        });
-    };
-    speech.onsoundend = function (e) {
-        myClass.setState({ status: '停止中' }, function () {
-            setUpSpeech(myClass);
-        });
-    };
-    speech.onresult = function (e) {
-        for (var i = e.resultIndex; i < e.results.length; i++) {
-            console.log(e.results);
-            if (e.results[i].isFinal) {
-                var text = [myClass.name + ':' + e.results[i][0].transcript];
-                room.send({ text: text });
-                myClass.setState({ textList: myClass.state.textList.concat(text) }, function () {
-                    setUpSpeech(myClass);
-                });
-            }
-            else {
-                myClass.setState({ flagSpeech: true });
-            }
-        }
-    };
-    myClass.setState({ flagSpeech: false }, function () {
-        speech.start();
-    });
-}
-setLocalStream();
+exports.Main = Main;
 
 
 /***/ })

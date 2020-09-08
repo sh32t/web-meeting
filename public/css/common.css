@@ -7,7 +7,7 @@ body {
   font-size: 30px;
 }
 
-#login{
+#login {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -16,25 +16,32 @@ body {
   width: 50vw;
 }
 
-#name-box{
+#room-id-box {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
 }
 
-.label{
+#name-box {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.label {
   text-align: center;
 }
 
-#login input{
+#login input {
   width: 10em;
   height: 5vh;
   font-size: 30px;
   font-family: 'UD Digi Kyokasho N-R';
 }
 
-.button{
+.button {
   height: 15h;
   width: 200px;
   border-radius: 50px;
@@ -45,6 +52,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  /* CSS3 */
+  -moz-user-select: none;
+  /* Firefox */
+  -webkit-user-select: none;
+  /* Safari、Chromeなど */
 }
 
 #main {
@@ -64,12 +78,12 @@ body {
   flex-wrap: wrap;
 }
 
-.video-contents{
+.video-contents {
   width: 35vw;
   box-sizing: border-box;
 }
 
-.maxview{
+.maxview {
   position: absolute;
   top: 0;
   left: 0;
@@ -82,14 +96,14 @@ body {
 #minutes-box {
   width: 30vw;
   height: 90vh;
-  border-left:thin solid black;
+  border-left: thin solid black;
   box-sizing: border-box;
   font-size: 15px;
   overflow-y: scroll;
 }
 
-#menu-box{
-  border-top:thin solid black;
+#menu-box {
+  border-top: thin solid black;
   box-sizing: border-box;
   position: absolute;
   bottom: 0;
@@ -102,6 +116,6 @@ body {
   z-index: 2;
 }
 
-#title{
-  font-size: 25px; 
+#title {
+  font-size: 25px;
 }

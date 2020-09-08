@@ -20,6 +20,7 @@
     "app-root-path": "^3.0.0",
     "express": "^4.17.1",
     "path": "^0.12.7",
+    "query-string": "^6.13.1",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
     "skyway-js": "^3.0.2",
